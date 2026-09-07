@@ -1,0 +1,20 @@
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Dataset (non-commercial license -- do not commit, download separately)
+data/raw/
+data/splits/
+*.csv.gz
+
+# Training artifacts
+runs/
+*.pt
+*.pth
+*.ckpt
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/

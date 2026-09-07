@@ -1,0 +1,14 @@
+torch>=2.2
+torchvision>=0.17
+timm>=0.9.16
+numpy>=1.26
+pandas>=2.2
+scikit-learn>=1.4
+opencv-python-headless>=4.9
+albumentations>=1.4
+grad-cam>=1.5.0
+shap>=0.45
+matplotlib>=3.8
+seaborn>=0.13
+pyyaml>=6.0
+tqdm>=4.66

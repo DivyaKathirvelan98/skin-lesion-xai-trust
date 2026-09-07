@@ -72,16 +72,33 @@ pip install -r requirements.txt
 
 ## Usage
 
+### Option A: Google Colab (recommended for training -- needs a GPU)
+
+Open [notebooks/run_experiments.ipynb](notebooks/run_experiments.ipynb) in Colab. It clones
+this repo, downloads HAM10000 + ground-truth segmentation masks via the Kaggle API (you
+upload your own `kaggle.json` token, used only in that session), trains the hybrid model and
+all three baselines, runs evaluation, and copies `runs/` to Google Drive.
+
+### Option B: Local / any machine with a GPU
+
 ```bash
-# 1. Prepare a lesion-wise (patient-wise) leakage-safe split
+# 1. Download data (requires ~/.kaggle/kaggle.json set up yourself beforehand)
+bash scripts/download_ham10000_kaggle.sh data/raw
+
+# 2. Prepare a lesion-wise (patient-wise) leakage-safe split
 python -m src.preprocessing.dataset_split --metadata data/raw/HAM10000_metadata.csv --out data/splits
 
-# 2. Train the proposed model (or a baseline via --model)
+# 3. Train the proposed model (or a baseline via --model resnet50 / efficientnet_b0 / vit_base)
 python -m src.train --config configs/config.yaml --model hybrid_cnn_transformer
 
-# 3. Evaluate: classification metrics + XAI faithfulness + uncertainty + Trust Score
-python -m src.evaluate --config configs/config.yaml --checkpoint runs/hybrid_cnn_transformer/best.pt
+# 4. Evaluate: classification metrics + XAI faithfulness + uncertainty + Trust Score
+python -m src.evaluate --config configs/config.yaml --model hybrid_cnn_transformer \
+    --checkpoint runs/hybrid_cnn_transformer/best.pt --out runs/eval_report_hybrid_cnn_transformer.json
 ```
+
+Results (`runs/eval_report_*.json`, `runs/results_summary.csv`) are the source of truth for
+the results section of the paper -- nothing is reported that wasn't actually produced by
+running this code.
 
 ## License
 

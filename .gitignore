@@ -25,3 +25,7 @@ run_all_training.sh
 training_log*.txt
 evaluation_log*.txt
 vit_base_training_log.txt
+
+# node (docx generation tooling)
+node_modules/
+package-lock.json

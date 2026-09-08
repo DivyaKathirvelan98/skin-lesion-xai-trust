@@ -1,9 +1,28 @@
 const {
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
   Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType,
-  Header, Footer, PageNumber, ExternalHyperlink,
+  Header, Footer, PageNumber, ExternalHyperlink, ImageRun,
 } = require("docx");
 const fs = require("fs");
+const path = require("path");
+
+const FIG_DIR = path.join(__dirname, "..", "docs", "figures");
+
+function figure(filename, widthPx, heightPx, caption) {
+  const data = fs.readFileSync(path.join(FIG_DIR, filename));
+  return [
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 200, after: 80 },
+      children: [new ImageRun({ data, type: "png", transformation: { width: widthPx, height: heightPx } })],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 200 },
+      children: [new TextRun({ text: caption, italics: true, size: 18 })],
+    }),
+  ];
+}
 
 const PAGE = { size: { width: 12240, height: 15840 } }; // US Letter
 
@@ -192,9 +211,16 @@ const doc = new Document({
         ),
         p(" "),
         p("The proposed hybrid model achieves the best accuracy, macro-AUROC, and Cohen's kappa among the four models, and is competitive with EfficientNet-B0 (its own CNN backbone) on balanced accuracy and macro-F1, only narrowly trailing on calibration (ECE). ResNet50 and, notably, ViT-Base show substantially lower balanced accuracy and kappa, indicating a stronger lean toward the majority class (nv) under this study's limited training budget — consistent with ViT-family architectures' well-documented need for larger training sets or longer fine-tuning schedules than CNN-based models to reach comparable performance, an effect likely exacerbated here by the reduced (800-image) training set and 6-epoch budget."),
+        ...figure("fig1_classification_bars.png", 500, 281, "Fig. 1. Classification performance by model (test set, n=201)."),
+        ...figure("fig2_training_curves.png", 520, 272, "Fig. 2. Training/validation loss and accuracy over 6 epochs for all four models."),
+        p("Figure 2 shows all four models still improving at epoch 6 without clear overfitting (validation loss tracking or below training loss throughout), suggesting that — consistent with the compute-driven limitation disclosed in Section V — additional epochs would likely improve results further rather than the models having converged."),
+        ...figure("fig3_confusion_matrix.png", 380, 345, "Fig. 3. Confusion matrix for the proposed hybrid model (test set, n=201)."),
+        p("Figure 3 shows the hybrid model's errors concentrate along the bkl/mel/nv boundary (e.g., 8 of 23 true bkl images predicted as nv, 10 of 17 true mel images predicted as nv) rather than being spread uniformly across classes — consistent with the well-documented clinical difficulty of visually distinguishing benign keratoses, melanoma, and melanocytic nevi in dermoscopic images, rather than an idiosyncratic model failure mode."),
 
         h("B. XAI Faithfulness and Cross-Method Agreement", HeadingLevel.HEADING_2),
         p("For the proposed hybrid model, mean faithfulness IoU (Grad-CAM++ vs. ground-truth lesion mask) was 0.163, and Pointing Game accuracy was 42.8% — i.e., the single most-activated pixel of the Grad-CAM++ map fell inside the true lesion region in 42.8% of test images. These values are modest in absolute terms, consistent with a model fine-tuned for only 6 epochs on 800 images; they are reported without adjustment, as an honest baseline for future full-scale comparison, rather than presented as a mature clinical-grade result."),
+        ...figure("fig5_xai_qualitative.png", 560, 142, "Fig. 4. Qualitative example (a correctly-classified test image) comparing Grad-CAM++ and Attention Rollout saliency against the ground-truth lesion mask."),
+        p("Figure 4 illustrates a representative case: both Grad-CAM++ and Attention Rollout concentrate activation within the true lesion boundary, though on different sub-regions of it — the specific behavior the cross-method agreement score and mask-anchored IoU in Sections III-D-E are designed to quantify rather than leave to visual impression."),
 
         h("C. Uncertainty and Trust Score", HeadingLevel.HEADING_2),
         p("The mean Trust Score across the test set was 0.250 (on a [0,1] scale). Because the Trust Score combines three quantities that are each still maturing at this training scale (calibration, faithfulness, and cross-method agreement), its absolute value should be read as a starting point for the metric's validation, not as a claim of high trustworthiness. Its value as a framework lies in making these three signals jointly visible and computable per-prediction — something the reviewed prior work (TIxAI, DermaScanAI, SkinSage XAI) does not do in combination."),
@@ -213,6 +239,7 @@ const doc = new Document({
           [18, 32, 12, 12, 12, 14]
         ),
         p(" "),
+        ...figure("fig4_ablation_bars.png", 560, 224, "Fig. 5. Ablation results: architecture (left) and preprocessing (right)."),
         p("The Transformer stage's clearest measurable benefit over the CNN-only baseline is macro-AUROC (0.913 vs. 0.878, from Table I); its effect on accuracy/kappa is present but modest at this training scale. The preprocessing ablation is more nuanced: hair removal and CLAHE normalization improve raw accuracy only slightly and, in this single run, balanced accuracy and macro-F1 were actually higher without preprocessing — plausibly run-to-run noise given the small (n=201) single-seed test set rather than a genuine effect, and a result we report honestly rather than omit. Preprocessing's clearer benefit is on explanation quality: faithfulness IoU improves by 0.058 and Pointing Game accuracy by 10.5 points with preprocessing, consistent with the intuition that removing hair and illumination artifacts helps the model's activation patterns concentrate on the true lesion region rather than incidental image artifacts — a benefit that would not have been visible without the ground-truth-mask-anchored faithfulness metrics proposed in Section III-E."),
 
         h("V. Limitations", HeadingLevel.HEADING_1),

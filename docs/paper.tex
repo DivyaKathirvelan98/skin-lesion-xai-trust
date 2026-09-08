@@ -336,6 +336,39 @@ ViT-family architectures' well-documented need for larger training sets or longe
 fine-tuning schedules than CNN-based models to reach comparable performance, an effect
 likely exacerbated here by the reduced (800-image) training set and 6-epoch budget.
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig1_classification_bars.png}
+\caption{Classification performance by model (test set, $n=201$).}
+\label{fig:classification_bars}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig2_training_curves.png}
+\caption{Training/validation loss and accuracy over 6 epochs for all four models.}
+\label{fig:training_curves}
+\end{figure}
+
+Fig.~\ref{fig:training_curves} shows all four models still improving at epoch 6 without
+clear overfitting (validation loss tracking or below training loss throughout), suggesting
+that -- consistent with the compute-driven limitation disclosed in
+Section~\ref{sec:limitations} -- additional epochs would likely improve results further
+rather than the models having converged.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.8\columnwidth]{figures/fig3_confusion_matrix.png}
+\caption{Confusion matrix for the proposed hybrid model (test set, $n=201$).}
+\label{fig:confusion_matrix}
+\end{figure}
+
+Fig.~\ref{fig:confusion_matrix} shows the hybrid model's errors concentrate along the
+bkl/mel/nv boundary (e.g., 8 of 23 true bkl images predicted as nv, 10 of 17 true mel images
+predicted as nv) rather than being spread uniformly across classes -- consistent with the
+well-documented clinical difficulty of visually distinguishing benign keratoses, melanoma,
+and melanocytic nevi in dermoscopic images, rather than an idiosyncratic model failure mode.
+
 \subsection{XAI Faithfulness and Cross-Method Agreement}
 
 For the proposed hybrid model, mean faithfulness IoU (Grad-CAM++ vs. ground-truth lesion
@@ -344,6 +377,20 @@ pixel of the Grad-CAM++ map fell inside the true lesion region in 42.8\% of test
 These values are modest in absolute terms, consistent with a model fine-tuned for only 6
 epochs on 800 images; they are reported without adjustment, as an honest baseline for future
 full-scale comparison, rather than presented as a mature clinical-grade result.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/fig5_xai_qualitative.png}
+\caption{Qualitative example (a correctly-classified test image) comparing Grad-CAM++ and
+Attention Rollout saliency against the ground-truth lesion mask.}
+\label{fig:xai_qualitative}
+\end{figure*}
+
+Fig.~\ref{fig:xai_qualitative} illustrates a representative case: both Grad-CAM++ and
+Attention Rollout concentrate activation within the true lesion boundary, though on
+different sub-regions of it -- the specific behavior the cross-method agreement score and
+mask-anchored IoU in Sections~III-D--E are designed to quantify rather than leave to visual
+impression.
 
 \subsection{Uncertainty and Trust Score}
 
@@ -380,6 +427,13 @@ Ablation & Variant & Acc. & Bal. Acc. & Macro F1 & Faithfulness IoU \\
 \end{tabular}%
 }
 \end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig4_ablation_bars.png}
+\caption{Ablation results: architecture (left) and preprocessing (right).}
+\label{fig:ablation_bars}
+\end{figure}
 
 The Transformer stage's clearest measurable benefit over the CNN-only baseline is
 macro-AUROC (0.913 vs. 0.878, from Table~\ref{tab:classification}); its effect on

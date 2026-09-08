@@ -71,6 +71,41 @@ lesion segmentation masks):
   ([notebooks/run_experiments.ipynb](../notebooks/run_experiments.ipynb)) is provided for
   exactly that.
 
+## Ablation study (partial -- see limitations)
+
+Two of the six ablations planned in [methodology.md](methodology.md) were run given the
+CPU-only time budget; the rest (multi-XAI-method vs. single-method agreement, MC-Dropout
+uncertainty on/off, focal loss vs. plain cross-entropy, segmentation-guided cropping) were
+not executed and are left as future work rather than reported without evidence.
+
+**1. Architecture: CNN-only vs. Hybrid CNN-Transformer** -- the hybrid model's CNN backbone
+*is* EfficientNet-B0, so the EfficientNet-B0 baseline row above doubles as this ablation:
+
+| Variant | Accuracy | Balanced Acc. | Macro F1 | Macro AUROC | Kappa |
+|---|---|---|---|---|---|
+| CNN-only (EfficientNet-B0) | 0.751 | 0.450 | 0.464 | 0.878 | 0.462 |
+| CNN + Transformer (proposed) | 0.761 | 0.457 | 0.466 | **0.913** | 0.494 |
+
+The transformer stage's main measurable benefit here is macro-AUROC (+0.035); other metrics
+improve marginally.
+
+**2. Preprocessing pipeline: with vs. without hair removal + CLAHE**
+(config: [configs/config_ablation_no_preprocessing.yaml](../configs/config_ablation_no_preprocessing.yaml),
+full report: [runs/eval_report_hybrid_no_preprocessing.json](../runs/eval_report_hybrid_no_preprocessing.json)):
+
+| Variant | Accuracy | Balanced Acc. | Macro F1 | Faithfulness IoU | Pointing Game Acc. |
+|---|---|---|---|---|---|
+| Without preprocessing | 0.751 | 0.510 | 0.511 | 0.105 | 0.323 |
+| With preprocessing (proposed) | 0.761 | 0.457 | 0.466 | **0.163** | **0.428** |
+
+Preprocessing's effect on raw accuracy is small, and balanced accuracy/macro-F1 are actually
+*higher* without it in this single run (n=201, one seed -- within plausible run-to-run
+noise, not a claim that preprocessing hurts classification). Its clearer, larger effect is
+on explanation quality: faithfulness IoU improves by +0.058 and Pointing Game accuracy by
++10.5 points with preprocessing, consistent with hair/artifact removal and contrast
+normalization helping the model's attention/activation maps align with the true lesion
+region rather than with hair or lighting artifacts.
+
 ## Reproducing this run
 
 ```bash

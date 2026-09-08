@@ -1,0 +1,57 @@
+# Reduced-scope configuration actually used for the CPU-only experimental run reported in
+# the paper. configs/config.yaml documents the full intended design (50 epochs, full
+# HAM10000); this variant trades scale for feasibility on a 4-core CPU machine with no GPU,
+# and should be disclosed as a compute-driven limitation, not presented as the full design.
+seed: 42
+
+data:
+  metadata_csv: data/raw/HAM10000_metadata.csv
+  images_dir: data/raw/images
+  segmentations_dir: data/raw/segmentations
+  splits_dir: data/splits
+  image_size: 160
+  classes: [akiec, bcc, bkl, df, mel, nv, vasc]
+
+preprocessing:
+  hair_removal: true
+  clahe: true
+  clahe_clip_limit: 2.0
+  segmentation_guided_crop: false
+
+training:
+  batch_size: 16
+  epochs: 6
+  optimizer: adamw
+  lr: 3.0e-4
+  weight_decay: 1.0e-4
+  scheduler: cosine
+  loss: focal
+  focal_alpha: 0.25
+  focal_gamma: 2.0
+  early_stopping_patience: 8
+  num_workers: 0
+
+model:
+  name: hybrid_cnn_transformer
+  pretrained: true  # fixed via truststore (OS trust store) -- see src/train.py
+  cnn_backbone: efficientnet_b0
+  transformer_layers: 4
+  transformer_heads: 8
+  transformer_dim: 256
+  mlp_ratio: 4.0
+  dropout: 0.2
+  mc_dropout_passes: 10
+
+xai:
+  methods: [gradcam++, attention_rollout]
+  saliency_threshold: 0.5
+  deletion_insertion_steps: 50
+
+trust_score:
+  weights:
+    uncertainty: 0.34
+    faithfulness: 0.33
+    agreement: 0.33
+
+evaluation:
+  metrics: [accuracy, balanced_accuracy, macro_f1, macro_auroc, cohen_kappa, ece]

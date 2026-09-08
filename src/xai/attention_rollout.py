@@ -8,18 +8,34 @@ import torch.nn as nn
 
 
 class AttentionRolloutHook:
-    """Captures self-attention weights from every nn.MultiheadAttention layer in a model."""
+    """Captures self-attention weights from every nn.MultiheadAttention layer in a model.
+
+    nn.TransformerEncoderLayer internally calls self_attn with need_weights=False (to use
+    the fused/flash-attention fast path), so no forward hook alone can observe attention
+    weights. We wrap each self_attn.forward to force need_weights=True,
+    average_attn_weights=False regardless of how it's called, then hook the (now
+    non-None) output.
+    """
 
     def __init__(self, transformer_encoder: nn.TransformerEncoder):
         self.attentions = []
         self.handles = []
+        self._original_forwards = []
         for layer in transformer_encoder.layers:
+            self._original_forwards.append((layer.self_attn, layer.self_attn.forward))
+            layer.self_attn.forward = self._make_forced_forward(layer.self_attn.forward)
             handle = layer.self_attn.register_forward_hook(self._hook)
             self.handles.append(handle)
 
+    @staticmethod
+    def _make_forced_forward(original_forward):
+        def forced_forward(query, key, value, *args, **kwargs):
+            kwargs["need_weights"] = True
+            kwargs["average_attn_weights"] = False
+            return original_forward(query, key, value, *args, **kwargs)
+        return forced_forward
+
     def _hook(self, module, inputs, output):
-        # nn.MultiheadAttention returns (attn_output, attn_weights) when
-        # need_weights=True (average_attn_weights=False for per-head weights).
         _, attn_weights = output if isinstance(output, tuple) else (output, None)
         if attn_weights is not None:
             self.attentions.append(attn_weights.detach())
@@ -30,6 +46,8 @@ class AttentionRolloutHook:
     def remove(self):
         for handle in self.handles:
             handle.remove()
+        for module, original_forward in self._original_forwards:
+            module.forward = original_forward
 
 
 def compute_rollout(attentions: list, discard_ratio: float = 0.0, head_fusion: str = "mean") -> torch.Tensor:

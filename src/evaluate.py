@@ -45,7 +45,10 @@ def evaluate(cfg: dict, model_name: str, checkpoint: str):
     )
     test_loader = DataLoader(test_ds, batch_size=1, shuffle=False, num_workers=0)
 
-    model = build_model(model_name, cfg, num_classes=num_classes).to(device)
+    # pretrained=False: the loaded checkpoint overwrites weights immediately below, so
+    # downloading pretrained ImageNet weights here would be wasted bandwidth/time.
+    eval_cfg = {**cfg, "model": {**cfg["model"], "pretrained": False}}
+    model = build_model(model_name, eval_cfg, num_classes=num_classes).to(device)
     model.load_state_dict(torch.load(checkpoint, map_location=device))
     model.eval()
 

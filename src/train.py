@@ -3,6 +3,12 @@ import argparse
 import random
 from pathlib import Path
 
+try:
+    import truststore
+    truststore.inject_into_ssl()  # use the OS trust store for pretrained-weight downloads
+except ImportError:
+    pass
+
 import numpy as np
 import torch
 import yaml
@@ -33,8 +39,10 @@ def build_model(name: str, cfg: dict, num_classes: int) -> torch.nn.Module:
             transformer_dim=m["transformer_dim"],
             mlp_ratio=m["mlp_ratio"],
             dropout=m["dropout"],
+            pretrained=cfg["model"].get("pretrained", True),
         )
-    return build_baseline(name, num_classes=num_classes)
+    return build_baseline(name, num_classes=num_classes, image_size=cfg["data"]["image_size"],
+                           pretrained=cfg["model"].get("pretrained", True))
 
 
 def run_epoch(model, loader, criterion, optimizer, device, train: bool) -> dict:

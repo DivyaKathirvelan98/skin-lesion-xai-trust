@@ -18,3 +18,10 @@ runs/
 .DS_Store
 .vscode/
 .idea/
+
+# large local downloads/extractions (not committed, see README/data/README.md)
+data/raw_downloads/
+run_all_training.sh
+training_log*.txt
+evaluation_log*.txt
+vit_base_training_log.txt

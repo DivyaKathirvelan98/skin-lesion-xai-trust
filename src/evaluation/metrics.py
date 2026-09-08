@@ -12,13 +12,21 @@ from sklearn.metrics import (
 
 def classification_report_dict(y_true: np.ndarray, y_pred: np.ndarray, y_proba: np.ndarray,
                                  class_names: list) -> dict:
+    all_labels = list(range(len(class_names)))
+    try:
+        macro_auroc = float(roc_auc_score(y_true, y_proba, multi_class="ovr", average="macro",
+                                           labels=all_labels))
+    except ValueError:
+        # A class absent from y_true in this split makes multiclass AUROC undefined.
+        macro_auroc = float("nan")
+
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)),
         "balanced_accuracy": float(balanced_accuracy_score(y_true, y_pred)),
-        "macro_f1": float(f1_score(y_true, y_pred, average="macro")),
-        "macro_auroc": float(roc_auc_score(y_true, y_proba, multi_class="ovr", average="macro")),
+        "macro_f1": float(f1_score(y_true, y_pred, average="macro", labels=all_labels)),
+        "macro_auroc": macro_auroc,
         "cohen_kappa": float(cohen_kappa_score(y_true, y_pred)),
-        "confusion_matrix": confusion_matrix(y_true, y_pred, labels=list(range(len(class_names)))).tolist(),
+        "confusion_matrix": confusion_matrix(y_true, y_pred, labels=all_labels).tolist(),
     }
 
 

@@ -28,7 +28,7 @@ def resize_to(saliency, shape):
 
 
 def main():
-    cfg = yaml.safe_load((ROOT / "configs" / "config_cpu_reduced.yaml").read_text())
+    cfg = yaml.safe_load((ROOT / "configs" / "config_cpu_20epoch.yaml").read_text())
     device = torch.device("cpu")
 
     test_ds = HAM10000Dataset(

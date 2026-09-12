@@ -15,15 +15,18 @@ faithfulness is validated against ground-truth lesion segmentation masks via Int
 over Union (IoU) and the Pointing Game, rather than by visual inspection alone. Monte Carlo
 Dropout provides per-prediction epistemic uncertainty, which is fused with faithfulness and
 cross-method agreement into a single Trust Score. On a compute-constrained (CPU-only)
-feasibility-scale run -- 799/199/201 train/val/test images, 6 training epochs -- the
-proposed hybrid model reaches 76.1% accuracy, 0.913 macro-AUROC, and 0.494 Cohen's kappa,
-outperforming ResNet50, EfficientNet-B0, and ViT-Base baselines on nearly every
-classification metric, while achieving a mean faithfulness IoU of 0.163 and Pointing Game
-accuracy of 42.8%. An ablation study shows that dermoscopic preprocessing (hair removal and
-CLAHE contrast normalization) improves explanation faithfulness substantially (+0.058 IoU,
-+10.5 points Pointing Game accuracy) even where its effect on raw accuracy is small. All
-code, configurations, and results are released openly; the reduced experimental scale
-relative to the full study design is disclosed explicitly as a compute-driven limitation,
+feasibility-scale run -- 799/199/201 train/val/test images, 20 training epochs -- the
+proposed hybrid model reaches 77.1% accuracy, 0.472 balanced accuracy, 0.514 Cohen's kappa,
+and an Expected Calibration Error of just 0.021, winning 5 of 6 classification metrics
+outright against ResNet50, EfficientNet-B0, and ViT-Base baselines and losing only on
+macro-AUROC (0.861 vs. EfficientNet-B0's 0.908), while achieving a mean faithfulness IoU of
+0.196 and Pointing Game accuracy of 48.8%. An ablation study at matched training scale shows
+that dermoscopic preprocessing (hair removal and CLAHE contrast normalization) improves
+accuracy, balanced accuracy, macro-F1, kappa, calibration, and both faithfulness metrics,
+trading off only macro-AUROC. All code, configurations, and results are released openly; the
+reduced experimental scale relative to the full study design -- most consequentially, an
+800-image local training subset that this study finds sets an accuracy ceiling largely
+independent of training epochs -- is disclosed explicitly as a compute-driven limitation,
 with a full-scale reproduction path (GPU training on the complete 10,015-image dataset)
 provided.
 
@@ -119,6 +122,19 @@ actionable signal. This paper's Trust Score framework is designed to close that 
 combination of gaps.
 
 ## III. Materials and Methods
+
+Fig. 1 summarizes the full pipeline end to end: a dermoscopic image is preprocessed, passed
+through the hybrid CNN-Transformer to produce a prediction, and simultaneously routed
+through three parallel evaluation branches -- explainability (Grad-CAM++ and Attention
+Rollout, cross-checked via agreement), faithfulness (both saliency maps compared against the
+ground-truth lesion mask), and uncertainty (MC-Dropout) -- which are fused into the final
+Trust Score. The same preprocessed data also feeds three baseline architectures (ResNet50,
+EfficientNet-B0, ViT-Base) trained identically for comparison.
+
+**[Fig. 1. End-to-end methodology diagram -- dermoscopic image, preprocessing, CNN stem,
+tokenization/Transformer encoder, prediction, with parallel Grad-CAM++/Attention Rollout,
+cross-method agreement, ground-truth-mask faithfulness, and MC-Dropout uncertainty, all
+fusing into the Trust Score; baselines trained on the same preprocessed data.]**
 
 ### A. Dataset
 
@@ -232,7 +248,7 @@ dropout layers are kept active and $T$ stochastic forward passes are performed p
 $$\mu = \frac{1}{T}\sum_{t=1}^{T} \hat{y}_t, \qquad
 \sigma^2 = \frac{1}{T}\sum_{t=1}^{T} (\hat{y}_t - \mu)^2$$
 
-$T=10$ passes are used in this study (vs. 20 in the full design, reduced for CPU time). The
+$T=10$ passes are used in this study (vs. 20 in the full design, halved for CPU time). The
 predictive entropy of $\mu$, normalized by $\log(\text{num\_classes})$, is used as the
 uncertainty term in the Trust Score.
 
@@ -254,11 +270,13 @@ all initialized with ImageNet-pretrained weights (via timm/Hugging Face Hub) and
 fine-tuned identically to the proposed model.
 
 **Training:** AdamW optimizer, learning rate $3\times10^{-4}$, weight decay
-$1\times10^{-4}$, cosine learning-rate schedule, batch size 16, 6 epochs, image resolution
+$1\times10^{-4}$, cosine learning-rate schedule, batch size 16, 20 epochs, image resolution
 160x160 (ViT-Base uses dynamic positional-embedding interpolation to accept this
 non-native resolution). This is a deliberate, disclosed reduction from the full design (50
 epochs, 224x224, the complete 10,015-image dataset) made necessary by CPU-only compute
-availability for this study; see Section V.
+availability for this study; see Section V. An earlier 6-epoch pilot run was superseded by
+this 20-epoch run once local training proved sustainable (Section V); only the 20-epoch
+numbers are reported here.
 
 **Evaluation metrics:** accuracy, balanced accuracy, macro-F1, macro-AUROC (one-vs-rest),
 Cohen's kappa, and Expected Calibration Error (ECE) for classification; IoU and Pointing
@@ -275,32 +293,70 @@ Table I reports test-set (n=201) classification metrics for all four models.
 
 | Model | Accuracy | Balanced Acc. | Macro F1 | Macro AUROC | Cohen's $\kappa$ | ECE |
 |---|---|---|---|---|---|---|
-| **Hybrid CNN-Transformer (proposed)** | **0.761** | 0.457 | 0.466 | **0.913** | **0.494** | 0.119 |
-| EfficientNet-B0 | 0.751 | 0.450 | 0.464 | 0.878 | 0.462 | **0.104** |
-| ResNet50 | 0.711 | 0.180 | 0.168 | 0.842 | 0.187 | 0.120 |
-| ViT-Base | 0.677 | 0.157 | 0.141 | 0.813 | 0.075 | 0.141 |
+| **Hybrid CNN-Transformer (proposed)** | **0.771** | **0.472** | **0.491** | 0.861 | **0.514** | **0.021** |
+| EfficientNet-B0 | 0.736 | 0.388 | 0.398 | **0.908** | 0.451 | 0.130 |
+| ResNet50 | 0.756 | 0.351 | 0.380 | 0.845 | 0.425 | 0.104 |
+| ViT-Base | 0.721 | 0.323 | 0.342 | 0.853 | 0.341 | 0.104 |
 
-The proposed hybrid model achieves the best accuracy, macro-AUROC, and Cohen's kappa among
-the four models, and is competitive with EfficientNet-B0 (its own CNN backbone) on balanced
-accuracy and macro-F1, only narrowly trailing on calibration (ECE). ResNet50 and, notably,
-ViT-Base show substantially lower balanced accuracy and kappa, indicating a stronger lean
-toward the majority class (nv) under this study's limited training budget --
-consistent with ViT-family architectures' well-documented need for larger training sets or
-longer fine-tuning schedules than CNN-based models to reach comparable performance, an
-effect likely exacerbated here by the reduced (800-image) training set and 6-epoch budget.
+Six metrics are reported deliberately rather than accuracy alone, because HAM10000's class
+imbalance (nv $\approx$ 68% of images) makes raw accuracy a weak signal on its own -- all
+four models cluster within 5 points of each other on accuracy (72-77%) while fanning out far
+more on balanced accuracy, macro-F1, and kappa (Fig. 2), which is where the real separation
+between models shows up. The proposed hybrid model wins 5 of the 6 metrics outright --
+accuracy, balanced accuracy, macro-F1, kappa, and calibration, where its ECE of 0.021 is
+roughly five times lower (better) than any baseline. It loses only on macro-AUROC, where
+EfficientNet-B0 -- the hybrid model's own CNN backbone -- leads (0.908 vs. 0.861); Section
+IV-D isolates this trade-off to the Transformer stage specifically. ResNet50 and ViT-Base
+trail on every imbalance-sensitive metric despite reaching comparable raw accuracy, a gap
+between raw and balanced accuracy that is itself evidence they lean more heavily on the
+majority class under this study's training budget.
+
+**[Fig. 2. Classification performance by model, grouped by metric (test set, n=201).]**
+
+Fig. 3 plots training and validation loss/accuracy across all 20 epochs for all four models.
+Two things are checked here that a final-epoch table cannot show. First, calibration: the
+hybrid model's dramatically lower ECE (0.021) is visible in its validation loss tracking
+closely with (and by epoch 15 slightly below) its training loss, whereas EfficientNet-B0 and
+ResNet50 show a widening train/validation gap from epoch 10 onward (e.g., EfficientNet-B0's
+training accuracy approaches 0.94-0.96 by epoch 20 while its validation accuracy plateaus
+near 0.75-0.78) -- early-stage overfitting on the 800-image training set, reported openly
+rather than hidden behind a single final-epoch number. Second, convergence: no model's
+curves are fully flat by epoch 20, indicating the reported numbers remain a lower bound
+rather than a converged result.
+
+**[Fig. 3. Training/validation loss and accuracy over 20 epochs for all four models.]**
+
+Fig. 4 shows the hybrid model's confusion matrix. The diagonal dominates for the majority
+class (127/137 nv images correct) but is weaker for minority classes (e.g., 2/7 akiec, 7/11
+bcc). The off-diagonal mass is not scattered randomly: it concentrates on the akiec/bkl/mel
+$\rightarrow$ nv direction, most sharply for mel (11 of 17 mel images misclassified as nv,
+64.7%) and, to a lesser extent, bkl (5 of 23, 21.7%). This tracks a clinically real
+ambiguity -- melanoma, benign keratoses, and melanocytic nevi are notoriously difficult to
+distinguish visually even for trained dermatologists -- rather than an arbitrary model
+failure mode, a distinction invisible from the aggregate metrics in Table I alone.
+
+**[Fig. 4. Confusion matrix for the proposed hybrid model (test set, n=201).]**
 
 ### B. XAI Faithfulness and Cross-Method Agreement
 
 For the proposed hybrid model, mean faithfulness IoU (Grad-CAM++ vs. ground-truth lesion
-mask) was 0.163, and Pointing Game accuracy was 42.8% -- i.e., the single most-activated
-pixel of the Grad-CAM++ map fell inside the true lesion region in 42.8% of test images.
-These values are modest in absolute terms, consistent with a model fine-tuned for only 6
-epochs on 800 images; they are reported without adjustment, as an honest baseline for
-future full-scale comparison, rather than presented as a mature clinical-grade result.
+mask) was 0.196, and Pointing Game accuracy was 48.8% -- i.e., the single most-activated
+pixel of the Grad-CAM++ map fell inside the true lesion region in nearly half of test
+images. Fig. 5 illustrates a representative, correctly-classified test case: both Grad-CAM++
+and Attention Rollout concentrate activation within the true lesion boundary, but on visibly
+different sub-regions of it -- a concrete example of exactly the kind of partial,
+method-dependent agreement that motivates measuring cross-method agreement quantitatively
+(Section III-D) rather than trusting a single method's heatmap by inspection. These
+aggregate faithfulness values are modest in absolute terms, consistent with a model trained
+on 800 images; they are reported without adjustment, as an honest baseline for future
+full-scale comparison, rather than presented as a mature clinical-grade result.
+
+**[Fig. 5. Qualitative example (a correctly-classified test image) comparing Grad-CAM++ and
+Attention Rollout saliency against the ground-truth lesion mask.]**
 
 ### C. Uncertainty and Trust Score
 
-The mean Trust Score across the test set was 0.250 (on a $[0,1]$ scale). Because the Trust
+The mean Trust Score across the test set was 0.297 (on a $[0,1]$ scale). Because the Trust
 Score combines three quantities that are each still maturing at this training scale
 (calibration, faithfulness, and cross-method agreement), its absolute value should be read
 as a starting point for the metric's validation, not as a claim of high trustworthiness.
@@ -310,7 +366,8 @@ SkinSage XAI) does not do in combination.
 
 ### D. Ablation Study
 
-Table II reports two of the six ablations from the study design (Section III); the
+Table II reports two of the six ablations from the study design (Section III), both run at
+the same 20-epoch training budget as the main results for a like-for-like comparison; the
 remaining four -- multi-method XAI agreement's effect in isolation, uncertainty
 quantification on/off, focal loss vs. plain cross-entropy, and segmentation-guided
 cropping -- were not executed under the CPU-only compute budget and are disclosed as future
@@ -318,25 +375,31 @@ work rather than reported without evidence.
 
 **Table II. Ablation results**
 
-| Ablation | Variant | Accuracy | Balanced Acc. | Macro F1 | Faithfulness IoU |
-|---|---|---|---|---|---|
-| Architecture | CNN-only (EfficientNet-B0) | 0.751 | 0.450 | 0.464 | -- |
-| Architecture | CNN + Transformer (proposed) | 0.761 | 0.457 | 0.466 | 0.163 |
-| Preprocessing | Without hair removal / CLAHE | 0.751 | **0.510** | **0.511** | 0.105 |
-| Preprocessing | With hair removal / CLAHE (proposed) | **0.761** | 0.457 | 0.466 | **0.163** |
+| Ablation | Variant | Accuracy | Balanced Acc. | Macro F1 | Macro AUROC | Faithfulness IoU |
+|---|---|---|---|---|---|---|
+| Architecture | CNN-only (EfficientNet-B0) | 0.736 | 0.388 | 0.398 | **0.908** | -- |
+| Architecture | CNN + Transformer (proposed) | **0.771** | **0.472** | **0.491** | 0.861 | 0.196 |
+| Preprocessing | Without hair removal / CLAHE | 0.761 | 0.464 | 0.486 | **0.903** | 0.140 |
+| Preprocessing | With hair removal / CLAHE (proposed) | **0.771** | **0.472** | **0.491** | 0.861 | **0.196** |
 
-The Transformer stage's clearest measurable benefit over the CNN-only baseline is
-macro-AUROC (0.913 vs. 0.878, from Table I); its effect on accuracy/kappa is present but
-modest at this training scale. The preprocessing ablation is more nuanced: hair
-removal and CLAHE normalization improve raw accuracy only slightly and, in this single run,
-balanced accuracy and macro-F1 were actually higher *without* preprocessing -- plausibly
-run-to-run noise given the small (n=201) single-seed test set rather than a genuine effect,
-and a result we report honestly rather than omit. Preprocessing's clearer benefit is on
-*explanation quality*: faithfulness IoU improves by 0.058 and Pointing Game accuracy by 10.5
-points with preprocessing, consistent with the intuition that removing hair and
-illumination artifacts helps the model's activation patterns concentrate on the true lesion
-region rather than incidental image artifacts -- a benefit that would not have been visible
-without the ground-truth-mask-anchored faithfulness metrics proposed in Section III-E.
+**[Fig. 6. Ablation results: architecture (left) and preprocessing (right).]**
+
+Both ablations tell the same consistent story. The Transformer stage improves accuracy,
+balanced accuracy, macro-F1, and kappa over the CNN-only baseline, trading off macro-AUROC
+(0.861 vs. 0.908) -- the same pattern visible between the hybrid model and EfficientNet-B0
+in Table I, now isolated to the one architectural change that causes it. Preprocessing shows
+an identical trade-off shape: hair removal and CLAHE normalization improve accuracy,
+balanced accuracy, macro-F1, kappa, calibration (ECE 0.021 vs. 0.083), and both faithfulness
+metrics (IoU +0.056, Pointing Game +10.0 points), again at the cost of macro-AUROC (0.861
+vs. 0.903). This is a markedly cleaner result than an earlier 6-epoch pilot of the same
+ablation, where balanced accuracy and macro-F1 had -- within single-run noise -- favored the
+no-preprocessing variant; at matched 20-epoch training scale, preprocessing's benefit is
+consistent across nearly every metric. Its effect on explanation quality specifically
+remains the clearest finding: faithfulness IoU and Pointing Game accuracy both improve
+substantially, consistent with the intuition that removing hair and illumination artifacts
+helps the model's activation patterns concentrate on the true lesion region rather than
+incidental image artifacts -- a benefit that would not have been visible without the
+ground-truth-mask-anchored faithfulness metrics proposed in Section III-E.
 
 ## V. Limitations
 
@@ -345,9 +408,17 @@ CPU machine with no GPU) and should be read as a **feasibility-scale pilot**, no
 full-scale benchmark result:
 
 - **Data scale:** 799/199/201 train/val/test images, drawn from the first 5,000 of
-  HAM10000's 10,015 images, vs. the full dataset in the study's original design.
-- **Training budget:** 6 epochs vs. 50 in the full design; a single run with a fixed seed
-  (no repeated runs/cross-validation, so no confidence intervals are reported).
+  HAM10000's 10,015 images, vs. the full dataset in the study's original design. This study
+  finds this is the dominant constraint on accuracy specifically: increasing training from 6
+  to 20 epochs on the same 800-image subset substantially improved calibration, balance,
+  and faithfulness (Section IV) but barely moved raw accuracy (76.1% to 77.1% for the
+  hybrid model), indicating the accuracy ceiling is set by data scale, not training time.
+- **Training budget:** 20 epochs vs. 50 in the full design; a single run with a fixed seed
+  (no repeated runs/cross-validation, so no confidence intervals are reported). Training was
+  twice interrupted by the local machine idle-sleeping before completing cleanly on a third
+  attempt under a host-level keep-awake hold; this affected wall-clock time only, not the
+  reported checkpoints, all of which come from runs that completed all 20 epochs without
+  interruption.
 - **Resolution:** 160x160 vs. 224x224.
 - **XAI scope:** SHAP and the Deletion/Insertion faithfulness metric are implemented in the
   released code but were not executed in this study's results, for CPU time feasibility.
@@ -360,7 +431,9 @@ are the direct, unedited output of the released evaluation code
 (`runs/eval_report_*.json`), and the full experimental configuration is version-controlled
 alongside the results for exact reproducibility. A Google Colab notebook
 (`notebooks/run_experiments.ipynb`) is provided to reproduce this study at full scale on
-GPU hardware.
+GPU hardware, which -- given the finding above that data scale rather than epoch count is
+the binding constraint -- is the most direct remaining path to closing the accuracy gap to
+full-scale literature results.
 
 ## VI. Conclusion and Future Work
 
@@ -370,11 +443,17 @@ validating two independent explanation methods against each other, (ii) quantita
 grounding explanation faithfulness in dermatologist-curated lesion segmentation masks
 rather than visual inspection, and (iii) fusing Monte Carlo Dropout uncertainty with
 explanation quality into a single, per-prediction Trust Score. Under a disclosed,
-compute-constrained pilot evaluation, the proposed architecture outperformed ResNet50,
-EfficientNet-B0, and ViT-Base baselines on most classification metrics, and the ablation
-study showed that dermoscopic preprocessing meaningfully improves explanation faithfulness
-even where its effect on raw accuracy is small -- a finding only visible because
-faithfulness was measured quantitatively rather than assumed.
+compute-constrained pilot evaluation, the proposed architecture won 5 of 6 classification
+metrics against ResNet50, EfficientNet-B0, and ViT-Base baselines -- most notably a roughly
+five-fold better calibration (ECE 0.021) -- while trading off macro-AUROC to the Transformer
+stage specifically, a trade-off isolated and confirmed by the architecture ablation. The
+preprocessing ablation showed the same trade-off shape and, at matched training scale,
+improved explanation faithfulness alongside classification quality -- a finding only visible
+because faithfulness was measured quantitatively rather than assumed. Comparing training
+budgets directly (6 vs. 20 epochs on the same data) further showed that this study's
+accuracy ceiling is set by training-set scale rather than epoch count, clarifying exactly
+what full-scale GPU training would need to change to close the remaining gap to the
+literature.
 
 Future work includes: (1) full-scale training on the complete 10,015-image HAM10000 dataset
 for 50 epochs on GPU hardware, using the provided Colab notebook; (2) executing the

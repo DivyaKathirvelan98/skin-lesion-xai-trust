@@ -37,9 +37,11 @@ def load_eval_reports():
 
 
 def parse_training_log():
-    """Parse training_log_v2.txt into {model: {"train_loss": [...], "val_loss": [...],
-    "train_acc": [...], "val_acc": [...]}}."""
-    text = (ROOT / "training_log_v2.txt").read_text()
+    """Parse training_log_v3.txt into {model: {"train_loss": [...], "val_loss": [...],
+    "train_acc": [...], "val_acc": [...]}}. Later blocks for the same model name overwrite
+    earlier ones, which naturally keeps the final successful run over any earlier
+    interrupted attempts (this log has several, from sleep-related interruptions)."""
+    text = (ROOT / "training_log_v3.txt").read_text()
     blocks = re.split(r"TRAINING: (\w+)\s+\(", text)[1:]  # alternating [name, block, name, block, ...]
     history = {}
     for i in range(0, len(blocks), 2):
@@ -87,9 +89,10 @@ def fig1_classification_bars(reports):
 
 def fig2_training_curves(history):
     fig, axes = plt.subplots(1, 2, figsize=(10, 4.2), gridspec_kw={"wspace": 0.3})
-    epochs = range(1, 7)
+    max_epochs = max(len(h["train_loss"]) for h in history.values())
     for i, name in enumerate(MODEL_ORDER):
         h = history[name]
+        epochs = range(1, len(h["train_loss"]) + 1)
         axes[0].plot(epochs, h["train_loss"], "--", color=COLORS[i], alpha=0.6)
         axes[0].plot(epochs, h["val_loss"], "-", color=COLORS[i], label=MODEL_LABELS[name].replace("\n", " "))
         axes[1].plot(epochs, h["train_acc"], "--", color=COLORS[i], alpha=0.6)
@@ -99,7 +102,7 @@ def fig2_training_curves(history):
     axes[1].set_xlabel("Epoch"); axes[1].set_ylabel("Accuracy"); axes[1].set_title("Accuracy\n(dashed=train, solid=val)")
     for ax in axes:
         ax.grid(alpha=0.3)
-        ax.set_xticks(list(epochs))
+        ax.set_xticks(list(range(1, max_epochs + 1, 2)))
     handles, labels = axes[1].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, -0.05), ncol=4, fontsize=8)
     fig.tight_layout(rect=[0, 0.08, 1, 1])
@@ -128,12 +131,13 @@ def fig3_confusion_matrix(reports):
 
 
 def fig4_ablation_bars():
-    # Values transcribed from docs/results.md (themselves from runs/eval_report_*.json)
+    # Values transcribed from docs/results.md (themselves from runs/eval_report_*.json), all
+    # at the 20-epoch training scale.
     groups = ["Accuracy", "Balanced\nAccuracy", "Macro F1", "Faithfulness\nIoU"]
-    arch = {"CNN-only\n(EfficientNet-B0)": [0.751, 0.450, 0.464, None],
-            "CNN+Transformer\n(proposed)": [0.761, 0.457, 0.466, 0.163]}
-    prep = {"Without preprocessing": [0.751, 0.510, 0.511, 0.105],
-            "With preprocessing\n(proposed)": [0.761, 0.457, 0.466, 0.163]}
+    arch = {"CNN-only\n(EfficientNet-B0)": [0.736, 0.388, 0.398, None],
+            "CNN+Transformer\n(proposed)": [0.771, 0.472, 0.491, 0.196]}
+    prep = {"Without preprocessing": [0.761, 0.464, 0.486, 0.140],
+            "With preprocessing\n(proposed)": [0.771, 0.472, 0.491, 0.196]}
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
     for ax, data, title in [(axes[0], arch, "Ablation: Architecture"), (axes[1], prep, "Ablation: Preprocessing")]:

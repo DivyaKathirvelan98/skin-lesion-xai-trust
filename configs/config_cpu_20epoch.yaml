@@ -14,8 +14,8 @@ data:
   - nv
   - vasc
 preprocessing:
-  hair_removal: false
-  clahe: false
+  hair_removal: true
+  clahe: true
   clahe_clip_limit: 2.0
   segmentation_guided_crop: false
 training:
